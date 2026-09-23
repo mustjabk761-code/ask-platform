@@ -22,7 +22,6 @@ export default {
 
     // ================= 1. GOOGLE LOGIN REDIRECT =================
     if (path === "/auth/google") {
-      111315652710-jrj6kfrhdiuhldl73bca0idb25b0kb6o.apps.googleusercontent.com
       const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(url.origin + "/auth/callback")}&response_type=code&scope=openid%20profile%20email`;
       return Response.redirect(googleAuthUrl, 302);
     }
@@ -37,7 +36,6 @@ export default {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
-          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
           client_id: env.GOOGLE_CLIENT_ID,
           client_secret: env.GOOGLE_CLIENT_SECRET,
           redirect_uri: url.origin + "/auth/callback",
@@ -116,7 +114,6 @@ export default {
 
         let imageUrl = "";
         if (imgBase64 && env.IMGBB_API_KEY) {
-          ea686671bddfd79acb7b95eb48ecafc2
           const formData = new FormData();
           formData.append("image", imgBase64);
           const imgRes = await fetch(`https://api.imgbb.com/1/upload?key=${env.IMGBB_API_KEY}`, {
@@ -226,9 +223,8 @@ export default {
         const { website_url } = await request.json();
         const siteRes = await fetch(website_url);
         const siteHtml = await siteRes.text();
-        // Hamari domain apni site ke naam se badal dena (globaltoolsbox.online):
         const hasBadge = siteHtml.includes("globaltoolsbox.online") &&
-                          /rel\s*=\s*["']?dofollow["']?/i.test(siteHtml);
+                        /rel\s*=\s*["']?dofollow["']?/i.test(siteHtml);
         if (hasBadge) {
           await env.DB.prepare(`UPDATE users SET is_dofollow = 1 WHERE id = ?`).bind(currentUser.id).run();
         }
@@ -506,6 +502,24 @@ function timeAgo(dateStr) {
   return days + "d ago";
 }
 
+async function loadQuestions() {
+  const res = await fetch("/api/questions?offset=" + currentOffset);
+  const data = await res.json();
+  const list = data.questions || [];
+  if(currentOffset === 0) allQuestions = list;
+  else allQuestions = allQuestions.concat(list);
+
+  renderFeed();
+  const loadBtnWrap = document.getElementById("load-more-wrap");
+  if(list.length === 10) loadBtnWrap.classList.remove("hidden");
+  else loadBtnWrap.classList.add("hidden");
+}
+
+function loadMore() {
+  currentOffset += 10;
+  loadQuestions();
+}
+
 async function toggleLike(id, btn) {
   if(likedIds.includes(id)) return;
   likedIds.push(id);
@@ -547,6 +561,7 @@ async function toggleAnswers(id) {
     box.classList.add("hidden");
   }
 }
+
 function renderAnswers(id, answers) {
   const box = document.getElementById("answers-box-" + id);
   const list = answers.length === 0
@@ -558,8 +573,9 @@ function renderAnswers(id, answers) {
       </div>`).join("");
   box.innerHTML = `${list}<div class="flex gap-2 mt-2">
     <input id="ans-in-${id}" placeholder="Write an answer..." class="flex-1 text-xs p-2 rounded-lg border dark:border-slate-600 dark:bg-slate-700">
-    <button onclick="submitAnswer(${id})" class="bg-blue-600 text-white text-xs px-3 rounded-lg font-bold">Send</button></div>`;
+    <button onclick="submitAnswer('${id}')" class="bg-blue-600 text-white text-xs px-3 rounded-lg font-bold">Send</button></div>`;
 }
+
 async function submitAnswer(id) {
   if(!isLoggedIn) return alert("Please login first.");
   const input = document.getElementById("ans-in-" + id);
@@ -577,7 +593,7 @@ async function openPublicProfile(userId) {
   viewingProfileId = userId;
   const res = await fetch("/api/profile?id=" + userId);
   const data = await res.json();
-  document.getElementById("pp-avatar").src = data.user.avatar;
+  document.getElementById("pp-avatar").src = data.user.avatar || 'https://via.placeholder.com/64';
   document.getElementById("pp-name").textContent = data.user.name;
   document.getElementById("pp-bio").textContent = data.user.bio || "No bio yet.";
   document.getElementById("pp-followers").textContent = data.followers_count + " followers" + (data.user.is_dofollow ? " • DoFollow Verified" : "");
@@ -585,7 +601,9 @@ async function openPublicProfile(userId) {
   btn.textContent = data.is_following ? "Unfollow" : "Follow";
   document.getElementById("public-profile-modal").classList.remove("hidden");
 }
+
 function closePublicProfile() { document.getElementById("public-profile-modal").classList.add("hidden"); }
+
 async function doFollow() {
   if(!isLoggedIn) return alert("Please login first.");
   const res = await fetch("/api/follow", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -598,15 +616,15 @@ async function loadDashboard() {
   if(!isLoggedIn) return;
   const res = await fetch("/api/profile?id=" + myId);
   const data = await res.json();
-  document.getElementById("dash-stats").textContent = data.followers_count + " followers • " + data.questions.length + " questions posted";
-  document.getElementById("dash-questions").innerHTML = data.questions.map(q => `
+  document.getElementById("dash-stats").textContent = data.followers_count + " followers • " + (data.questions ? data.questions.length : 0) + " questions posted";
+  document.getElementById("dash-questions").innerHTML = (data.questions && data.questions.length > 0) ? data.questions.map(q => `
     <div class="border dark:border-slate-700 rounded-lg p-3 flex justify-between items-center">
       <span class="text-sm font-semibold">${q.title}</span>
       <div class="flex gap-3 text-xs">
         <button onclick="sharePost('${q.id}')" class="text-blue-600">Share</button>
         <button onclick="deleteQuestion('${q.id}')" class="text-red-500">Delete</button>
       </div>
-    </div>`).join("") || "<p class='text-sm text-slate-400'>No questions yet.</p>";
+    </div>`).join("") : "<p class='text-sm text-slate-400'>No questions yet.</p>";
 }
 
 async function loadEditProfile() {
@@ -617,6 +635,7 @@ async function loadEditProfile() {
   document.getElementById("edit-bio").value = data.user.bio || "";
   document.getElementById("edit-website").value = data.user.website_url || "";
 }
+
 async function saveProfile() {
   const name = document.getElementById("edit-name").value;
   const bio = document.getElementById("edit-bio").value;
@@ -625,6 +644,7 @@ async function saveProfile() {
     body: JSON.stringify({ name, bio, website_url }) });
   alert("Profile saved!");
 }
+
 async function verifyDofollow() {
   const website_url = document.getElementById("edit-website").value;
   if(!website_url) return alert("Enter your website URL first and Save.");
@@ -638,12 +658,15 @@ function renderFeed() {
   const query = (document.getElementById("search-input").value || "").toLowerCase();
   const container = document.getElementById("questions-container");
   const filtered = allQuestions.filter(q => (q.title||"").toLowerCase().includes(query) || (q.tags||"").toLowerCase().includes(query));
+  
   if(filtered.length === 0) {
     container.innerHTML = "<p class='text-center text-slate-400 py-8'>No questions found.</p>";
     return;
   }
+  
   container.innerHTML = filtered.map(q => {
     const tagsHtml = q.tags ? q.tags.split(",").filter(Boolean).map(t => `<span class="tag-pill">#${t}</span>`).join(" ") : "";
+    const isLiked = likedIds.includes(q.id);
     return `
     <div class="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 p-5 space-y-2 shadow-sm">
       <div class="flex items-center gap-3 cursor-pointer" onclick="openPublicProfile('${q.user_id}')">
@@ -657,52 +680,32 @@ function renderFeed() {
         </div>
       </div>
       <h3 class="text-lg font-bold">${q.title}</h3>
-      <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">${q.body}</p>
-      ${q.image_url ? `<img src="${q.image_url}" class="rounded-lg w-full">` : ""}
+      <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">${q.body}</p>${q.image_url ? `<img src="${q.image_url}" class="rounded-lg w-full max-h-80 object-cover mt-2">` : ""}
       <div>${tagsHtml}</div>
       <div class="border-t dark:border-slate-700 pt-3 flex justify-between text-xs font-semibold text-slate-500">
-        <button onclick="toggleLike('${q.id}', this)" class="${likedIds.includes(q.id) ? 'liked' : ''} flex items-center gap-1"><i class="fa-solid fa-heart"></i> <span class="like-count">${q.likes || 0}</span></button>
-        <button onclick="toggleAnswers('${q.id}')" class="flex items-center gap-1"><i class="fa-regular fa-comment"></i> Comment</button>
-        <button onclick="sharePost('${q.id}')" class="flex items-center gap-1"><i class="fa-solid fa-share"></i> Share</button>
+        <button onclick="toggleLike('${q.id}', this)" class="${isLiked ? 'liked' : ''} hover:text-red-500 flex items-center gap-1">
+          <i class="fa-solid fa-heart"></i> <span class="like-count">${q.likes || 0}</span>
+        </button>
+        <button onclick="toggleAnswers('${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
+          <i class="fa-solid fa-comment"></i> Answers
+        </button>
+        <button onclick="sharePost('${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
+          <i class="fa-solid fa-share"></i> Share
+        </button>
       </div>
-      <div id="answers-box-${q.id}" class="hidden"></div>
+      <div id="answers-box-${q.id}" class="hidden mt-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg"></div>
     </div>`;
   }).join("");
 }
 
-async function loadQuestions() {
-  const container = document.getElementById("questions-container");
-  container.innerHTML = "<p class='text-center text-slate-400 py-8'>Loading...</p>";
-  const res = await fetch("/api/questions?offset=0");
-  const data = await res.json();
-  allQuestions = data.questions || [];
-  currentOffset = allQuestions.length;
-  renderFeed();
-  document.getElementById("load-more-wrap").classList.toggle("hidden", allQuestions.length < 10);
-}
-async function loadMore() {
-  const res = await fetch("/api/questions?offset=" + currentOffset);
-  const data = await res.json();
-  allQuestions = allQuestions.concat(data.questions || []);
-  currentOffset += (data.questions || []).length;
-  renderFeed();
-  document.getElementById("load-more-wrap").classList.toggle("hidden", (data.questions||[]).length < 10);
-}
-
-window.addEventListener("scroll", () => {
-  if((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 200) {
-    if(!document.getElementById("load-more-wrap").classList.contains("hidden")) loadMore();
-  }
-});
-
-init();
+window.onload = init;
 </script>
 </body>
 </html>`;
+
       return new Response(html, { headers: { "Content-Type": "text/html;charset=UTF-8" } });
     }
 
     return new Response("Not Found", { status: 404 });
   }
 };
-
