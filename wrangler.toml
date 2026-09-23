@@ -1,0 +1,8 @@
+name = "ask-platform"
+main = "index.js"
+compatibility_date = "2026-09-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "qa-platform-db"
+database_id = "qa-platform-db"
