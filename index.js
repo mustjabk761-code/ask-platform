@@ -1,7 +1,16 @@
+const GOOGLE_CLIENT_ID = "111315652710-jrj6kfrhdiuhldl73bca0idb25b0kb6o.apps.googleusercontent.com";
+const GOOGLE_CLIENT_SECRET = "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";
+const IMGBB_API_KEY = "ea686671bddfd79acb7b95eb48ecafc2";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // Use environment variables if set in Cloudflare, otherwise fallback to constants above
+    const googleClientId = env.GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID;
+    const googleClientSecret = env.GOOGLE_CLIENT_SECRET || GOOGLE_CLIENT_SECRET;
+    const imgbbApiKey = env.IMGBB_API_KEY || IMGBB_API_KEY;
 
     // ================= COOKIE / SESSION HELPERS =================
     const cookies = Object.fromEntries(
@@ -22,7 +31,7 @@ export default {
 
     // ================= 1. GOOGLE LOGIN REDIRECT =================
     if (path === "/auth/google") {
-      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(url.origin + "/auth/callback")}&response_type=code&scope=openid%20profile%20email`;
+      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(url.origin + "/auth/callback")}&response_type=code&scope=openid%20profile%20email`;
       return Response.redirect(googleAuthUrl, 302);
     }
 
@@ -36,8 +45,8 @@ export default {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
-          client_id: env.GOOGLE_CLIENT_ID,
-          client_secret: env.GOOGLE_CLIENT_SECRET,
+          client_id: googleClientId,
+          client_secret: googleClientSecret,
           redirect_uri: url.origin + "/auth/callback",
           grant_type: "authorization_code",
         }),
@@ -79,7 +88,7 @@ export default {
       });
     }
 
-    // ================= 4. GET FEED (with pagination for infinite scroll) =================
+    // ================= 4. GET FEED =================
     if (path === "/api/questions" && request.method === "GET") {
       const offset = parseInt(url.searchParams.get("offset") || "0");
       const { results } = await env.DB.prepare(
@@ -90,7 +99,7 @@ export default {
       return Response.json({ questions: results });
     }
 
-    // ================= 5. SUBMIT QUESTION (daily lock + tags + image) =================
+    // ================= 5. SUBMIT QUESTION =================
     if (path === "/api/questions" && request.method === "POST") {
       if (!currentUser) {
         return Response.json({ success: false, error: "Please login with Google first" }, { status: 401 });
@@ -113,10 +122,10 @@ export default {
         const tagArr = (tags || "").split(",").map(t => t.trim()).filter(Boolean).slice(0, 3);
 
         let imageUrl = "";
-        if (imgBase64 && env.IMGBB_API_KEY) {
+        if (imgBase64 && imgbbApiKey) {
           const formData = new FormData();
           formData.append("image", imgBase64);
-          const imgRes = await fetch(`https://api.imgbb.com/1/upload?key=${env.IMGBB_API_KEY}`, {
+          const imgRes = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
             method: "POST",
             body: formData
           });
@@ -153,7 +162,7 @@ export default {
       return Response.json({ success: true });
     }
 
-    // ================= 8. ANSWERS (GET / POST) =================
+    // ================= 8. ANSWERS =================
     if (path === "/api/answers" && request.method === "GET") {
       const qid = url.searchParams.get("question_id");
       const { results } = await env.DB.prepare(
@@ -191,7 +200,7 @@ export default {
       }
     }
 
-    // ================= 10. PUBLIC PROFILE + DASHBOARD DATA =================
+    // ================= 10. PUBLIC PROFILE =================
     if (path === "/api/profile" && request.method === "GET") {
       const id = url.searchParams.get("id") || (currentUser ? currentUser.id : "");
       const user = await env.DB.prepare(`SELECT id, name, avatar, bio, website_url, is_dofollow FROM users WHERE id = ?`).bind(id).first();
@@ -413,7 +422,7 @@ function addLinkPrompt() {
   const link = prompt("Enter URL:");
   const text = prompt("Enter link text:");
   if(link && text) {
-    document.getElementById("qBody").value += ` <a href="${link}" target="_blank">${text}</a> `;
+    document.getElementById("qBody").value += \` <a href="\${link}" target="_blank">\${text}</a> \`;
   }
 }
 
@@ -430,7 +439,7 @@ function handleTagKey(e) {
 }
 function renderTagPills() {
   document.getElementById("tag-pills").innerHTML = tags.map((t, i) =>
-    `<span class="tag-pill">#${t} <i class="fa-solid fa-xmark cursor-pointer" onclick="removeTag(${i})"></i></span>`
+    \`<span class="tag-pill">#\${t} <i class="fa-solid fa-xmark cursor-pointer" onclick="removeTag(\${i})"></i></span>\`
   ).join("");
 }
 function removeTag(i) { tags.splice(i, 1); renderTagPills(); }
@@ -566,14 +575,14 @@ function renderAnswers(id, answers) {
   const box = document.getElementById("answers-box-" + id);
   const list = answers.length === 0
     ? '<div class="text-xs text-slate-400 py-1">No answers yet.</div>'
-    : answers.map(a => `
+    : answers.map(a => \`
       <div class="flex gap-2 py-2 border-t dark:border-slate-700">
-        <img src="${a.user_avatar || 'https://via.placeholder.com/28'}" class="w-7 h-7 rounded-full object-cover">
-        <div><span class="font-bold text-xs">${a.user_name || 'Anonymous'}</span><p class="text-xs text-slate-600 dark:text-slate-300">${a.body}</p></div>
-      </div>`).join("");
-  box.innerHTML = `${list}<div class="flex gap-2 mt-2">
-    <input id="ans-in-${id}" placeholder="Write an answer..." class="flex-1 text-xs p-2 rounded-lg border dark:border-slate-600 dark:bg-slate-700">
-    <button onclick="submitAnswer('${id}')" class="bg-blue-600 text-white text-xs px-3 rounded-lg font-bold">Send</button></div>`;
+        <img src="\${a.user_avatar || 'https://via.placeholder.com/28'}" class="w-7 h-7 rounded-full object-cover">
+        <div><span class="font-bold text-xs">\${a.user_name || 'Anonymous'}</span><p class="text-xs text-slate-600 dark:text-slate-300">\${a.body}</p></div>
+      </div>\`).join("");
+  box.innerHTML = \`\${list}<div class="flex gap-2 mt-2">
+    <input id="ans-in-\${id}" placeholder="Write an answer..." class="flex-1 text-xs p-2 rounded-lg border dark:border-slate-600 dark:bg-slate-700">
+    <button onclick="submitAnswer('\${id}')" class="bg-blue-600 text-white text-xs px-3 rounded-lg font-bold">Send</button></div>\`;
 }
 
 async function submitAnswer(id) {
@@ -617,14 +626,14 @@ async function loadDashboard() {
   const res = await fetch("/api/profile?id=" + myId);
   const data = await res.json();
   document.getElementById("dash-stats").textContent = data.followers_count + " followers • " + (data.questions ? data.questions.length : 0) + " questions posted";
-  document.getElementById("dash-questions").innerHTML = (data.questions && data.questions.length > 0) ? data.questions.map(q => `
+  document.getElementById("dash-questions").innerHTML = (data.questions && data.questions.length > 0) ? data.questions.map(q => \`
     <div class="border dark:border-slate-700 rounded-lg p-3 flex justify-between items-center">
-      <span class="text-sm font-semibold">${q.title}</span>
+      <span class="text-sm font-semibold">\${q.title}</span>
       <div class="flex gap-3 text-xs">
-        <button onclick="sharePost('${q.id}')" class="text-blue-600">Share</button>
-        <button onclick="deleteQuestion('${q.id}')" class="text-red-500">Delete</button>
+        <button onclick="sharePost('\${q.id}')" class="text-blue-600">Share</button>
+        <button onclick="deleteQuestion('\${q.id}')" class="text-red-500">Delete</button>
       </div>
-    </div>`).join("") : "<p class='text-sm text-slate-400'>No questions yet.</p>";
+    </div>\`).join("") : "<p class='text-sm text-slate-400'>No questions yet.</p>";
 }
 
 async function loadEditProfile() {
@@ -665,36 +674,37 @@ function renderFeed() {
   }
   
   container.innerHTML = filtered.map(q => {
-    const tagsHtml = q.tags ? q.tags.split(",").filter(Boolean).map(t => `<span class="tag-pill">#${t}</span>`).join(" ") : "";
+    const tagsHtml = q.tags ? q.tags.split(",").filter(Boolean).map(t => \`<span class="tag-pill">#\${t}</span>\`).join(" ") : "";
     const isLiked = likedIds.includes(q.id);
-    return `
+    return \`
     <div class="bg-white dark:bg-slate-800 rounded-xl border dark:border-slate-700 p-5 space-y-2 shadow-sm">
-      <div class="flex items-center gap-3 cursor-pointer" onclick="openPublicProfile('${q.user_id}')">
-        <img src="${q.user_avatar || 'https://via.placeholder.com/36'}" class="w-9 h-9 rounded-full object-cover">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="openPublicProfile('\${q.user_id}')">
+        <img src="\${q.user_avatar || 'https://via.placeholder.com/36'}" class="w-9 h-9 rounded-full object-cover">
         <div>
           <div class="flex items-center gap-1">
-            <span class="font-bold text-sm">${q.user_name || "Member"}</span>
-            ${q.is_dofollow ? '<i class="fa-solid fa-circle-check text-green-500 text-xs"></i>' : ''}
+            <span class="font-bold text-sm">\${q.user_name || "Member"}</span>
+            \${q.is_dofollow ? '<i class="fa-solid fa-circle-check text-green-500 text-xs"></i>' : ''}
           </div>
-          <span class="text-xs text-slate-400">${timeAgo(q.created_at)}</span>
+          <span class="text-xs text-slate-400">\${timeAgo(q.created_at)}</span>
         </div>
       </div>
-      <h3 class="text-lg font-bold">${q.title}</h3>
-      <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">${q.body}</p>${q.image_url ? `<img src="${q.image_url}" class="rounded-lg w-full max-h-80 object-cover mt-2">` : ""}
-      <div>${tagsHtml}</div>
+      <h3 class="text-lg font-bold">\${q.title}</h3>
+      <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">\${q.body}</p>
+      \${q.image_url ? \`<img src="\${q.image_url}" class="rounded-lg w-full max-h-80 object-cover mt-2">\` : ""}
+      <div>\${tagsHtml}</div>
       <div class="border-t dark:border-slate-700 pt-3 flex justify-between text-xs font-semibold text-slate-500">
-        <button onclick="toggleLike('${q.id}', this)" class="${isLiked ? 'liked' : ''} hover:text-red-500 flex items-center gap-1">
-          <i class="fa-solid fa-heart"></i> <span class="like-count">${q.likes || 0}</span>
+        <button onclick="toggleLike('\${q.id}', this)" class="\${isLiked ? 'liked' : ''} hover:text-red-500 flex items-center gap-1">
+          <i class="fa-solid fa-heart"></i> <span class="like-count">\${q.likes || 0}</span>
         </button>
-        <button onclick="toggleAnswers('${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
+        <button onclick="toggleAnswers('\${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
           <i class="fa-solid fa-comment"></i> Answers
         </button>
-        <button onclick="sharePost('${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
+        <button onclick="sharePost('\${q.id}')" class="hover:text-blue-600 flex items-center gap-1">
           <i class="fa-solid fa-share"></i> Share
         </button>
       </div>
-      <div id="answers-box-${q.id}" class="hidden mt-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg"></div>
-    </div>`;
+      <div id="answers-box-\${q.id}" class="hidden mt-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg"></div>
+    </div>\`;
   }).join("");
 }
 
